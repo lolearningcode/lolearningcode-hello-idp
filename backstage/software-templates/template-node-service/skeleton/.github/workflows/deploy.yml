@@ -7,16 +7,34 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     env:
       AWS_REGION: us-west-1
       SERVICE_NAME: ${{ github.event.repository.name }}
       ENVIRONMENT: dev
       IMAGE_TAG: ${{ github.sha }}
-      TERRAFORM_DIR: terraform
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+
+      - name: Detect Terraform directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -d "terraform" ]; then
+            echo "TERRAFORM_DIR=terraform" >> "$GITHUB_ENV"
+            echo "Using Terraform dir: terraform"
+          elif [ -d "backstage/software-templates/template-node-service/skeleton/terraform" ]; then
+            echo "TERRAFORM_DIR=backstage/software-templates/template-node-service/skeleton/terraform" >> "$GITHUB_ENV"
+            echo "Using Terraform dir: backstage/software-templates/template-node-service/skeleton/terraform"
+          else
+            echo "Terraform directory not found at 'terraform' or 'backstage/software-templates/template-node-service/skeleton/terraform'" >&2
+            echo "Set TERRAFORM_DIR to the correct path in env or move the terraform folder to repo root." >&2
+            exit 1
+          fi
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
