@@ -1,9 +1,14 @@
 apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
-  name: template-node-service
-  title: Node.js Microservice Template
+  name: hello-idp
+  description: Node service created via Backstage template
+  tags:
+    - node
+    - ecs
+  annotations:
+    github.com/project-slug: lolearningcode/lolearningcode-hello-idp
 spec:
-  type: template
-  lifecycle: experimental
+  type: service
+  lifecycle: production
   owner: platform-team
