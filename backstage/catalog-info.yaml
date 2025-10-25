@@ -1,0 +1,9 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: template-node-service
+  title: Node.js Microservice Template
+spec:
+  type: template
+  lifecycle: experimental
+  owner: platform-team

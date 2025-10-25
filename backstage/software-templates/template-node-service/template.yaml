@@ -1,0 +1,44 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: template-node-service
+  title: Node.js Service Template
+  description: Scaffold a Node.js service with CI/CD and ECS deployment
+spec:
+  owner: platform-team
+  type: service
+
+  parameters:
+    - title: Provide basic info
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          title: Service name
+        repoUrl:
+          type: string
+          title: GitHub Repository (e.g., cleo-org/my-service)
+
+  steps:
+    - id: fetch-base
+      name: Fetch Skeleton
+      action: fetch:template
+      input:
+        url: ./skeleton
+        values:
+          name: ${{ parameters.name }}
+
+    - id: publish
+      name: Publish to GitHub
+      action: publish:github
+      input:
+        repoUrl: ${{ parameters.repoUrl }}
+        repoVisibility: public
+        defaultBranch: main
+        description: Node.js service generated from internal platform
+
+  output:
+    links:
+      - title: GitHub Repo
+        url: ${{ steps.publish.output.remoteUrl }}

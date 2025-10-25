@@ -1,0 +1,8 @@
+scaffolder:
+  generators:
+    templates:
+      - ./templates/template-node-service/template.yaml
+integrations:
+  github:
+    - host: github.com
+      token: ${GITHUB_TOKEN}
