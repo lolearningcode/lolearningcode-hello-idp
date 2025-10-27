@@ -18,7 +18,7 @@ data "aws_vpcs" "selected" {
   dynamic "filter" {
     for_each = var.vpc_tag_filters
     content {
-      name   = "tag.${filter.key}"
+      name   = "tag:${filter.key}"
       values = [filter.value]
     }
   }
@@ -46,7 +46,7 @@ data "aws_subnets" "public_selected" {
   dynamic "filter" {
     for_each = var.public_subnet_tag_filters
     content {
-      name   = "tag.${filter.key}"
+      name   = "tag:${filter.key}"
       values = [filter.value]
     }
   }
@@ -63,7 +63,7 @@ data "aws_subnets" "private_selected" {
   dynamic "filter" {
     for_each = var.private_subnet_tag_filters
     content {
-      name   = "tag.${filter.key}"
+      name   = "tag:${filter.key}"
       values = [filter.value]
     }
   }
@@ -90,30 +90,13 @@ data "aws_subnets" "all_in_vpc" {
 
 data "aws_region" "current" {}
 
-resource "aws_ecr_repository" "this" {
-  name                 = local.name_prefix
-  image_tag_mutability = "MUTABLE"
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-  encryption_configuration {
-    encryption_type = "AES256"
-  }
-  tags = var.tags
-
-  lifecycle {
-    ignore_changes = [
-      image_tag_mutability,
-      image_scanning_configuration,
-      encryption_configuration,
-      tags,
-    ]
-    prevent_destroy = true
-  }
+# Use existing ECR repository (created by workflow)
+data "aws_ecr_repository" "this" {
+  name = local.name_prefix
 }
 
 resource "aws_ecr_lifecycle_policy" "keep_recent" {
-  repository = aws_ecr_repository.this.name
+  repository = data.aws_ecr_repository.this.name
   policy = jsonencode({
     rules = [
       {
@@ -285,7 +268,7 @@ resource "aws_ecs_task_definition" "this" {
   container_definitions = jsonencode([
     {
       name      = local.name_prefix
-      image     = "${aws_ecr_repository.this.repository_url}:${var.image_tag}"
+      image     = "${data.aws_ecr_repository.this.repository_url}:${var.image_tag}"
       essential = true
       portMappings = [
         {

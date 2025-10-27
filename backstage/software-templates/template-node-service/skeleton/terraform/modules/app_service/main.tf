@@ -18,7 +18,7 @@ data "aws_vpcs" "selected" {
   dynamic "filter" {
     for_each = var.vpc_tag_filters
     content {
-      name   = "tag.${filter.key}"
+      name   = "tag:${filter.key}"
       values = [filter.value]
     }
   }
@@ -46,7 +46,7 @@ data "aws_subnets" "public_selected" {
   dynamic "filter" {
     for_each = var.public_subnet_tag_filters
     content {
-      name   = "tag.${filter.key}"
+      name   = "tag:${filter.key}"
       values = [filter.value]
     }
   }
@@ -63,7 +63,7 @@ data "aws_subnets" "private_selected" {
   dynamic "filter" {
     for_each = var.private_subnet_tag_filters
     content {
-      name   = "tag.${filter.key}"
+      name   = "tag:${filter.key}"
       values = [filter.value]
     }
   }

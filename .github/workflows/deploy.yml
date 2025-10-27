@@ -86,40 +86,31 @@ jobs:
             -backend-config="dynamodb_table=${{ env.TF_LOCK_TABLE }}" \
             -backend-config="encrypt=true"
 
-      - name: Handle existing ECR repository
+      - name: Ensure ECR repository exists
         working-directory: terraform
         run: |
           set -e
           
-          # Check if ECR repository already exists
+          # Check if ECR repository already exists, create if not
           ECR_REPO_NAME="${{ env.SERVICE_NAME }}-${{ env.ENVIRONMENT }}"
           
-          if aws ecr describe-repositories --repository-names "$ECR_REPO_NAME" --region "${{ env.AWS_REGION }}" &>/dev/null; then
-            echo "ECR repository $ECR_REPO_NAME already exists, importing to Terraform state..."
-            
-            # Try to import the existing repository
-            terraform import \
-              -var="service_name=${{ env.SERVICE_NAME }}" \
-              -var="environment=${{ env.ENVIRONMENT }}" \
-              -var="region=${{ env.AWS_REGION }}" \
-              module.app_service.aws_ecr_repository.this \
-              "$ECR_REPO_NAME" || echo "Import failed or already imported"
+          if ! aws ecr describe-repositories --repository-names "$ECR_REPO_NAME" --region "${{ env.AWS_REGION }}" &>/dev/null; then
+            echo "Creating ECR repository $ECR_REPO_NAME..."
+            aws ecr create-repository \
+              --repository-name "$ECR_REPO_NAME" \
+              --region "${{ env.AWS_REGION }}" \
+              --image-scanning-configuration scanOnPush=true \
+              --encryption-configuration encryptionType=AES256
           else
-            echo "ECR repository $ECR_REPO_NAME does not exist, will be created by Terraform"
+            echo "ECR repository $ECR_REPO_NAME already exists"
           fi
-          
-          # Apply just the ECR repository
-          terraform apply -auto-approve \
-            -target=module.app_service.aws_ecr_repository.this \
-            -var="service_name=${{ env.SERVICE_NAME }}" \
-            -var="environment=${{ env.ENVIRONMENT }}" \
-            -var="region=${{ env.AWS_REGION }}"
 
-      - name: Fetch ECR repository URL
+      - name: Get ECR repository URL
         id: tfout
-        working-directory: terraform
         run: |
-          echo "ecr_url=$(terraform output -raw ecr_repository_url)" >> $GITHUB_OUTPUT
+          ECR_REPO_NAME="${{ env.SERVICE_NAME }}-${{ env.ENVIRONMENT }}"
+          ECR_URL=$(aws ecr describe-repositories --repository-names "$ECR_REPO_NAME" --region "${{ env.AWS_REGION }}" --query 'repositories[0].repositoryUri' --output text)
+          echo "ecr_url=$ECR_URL" >> $GITHUB_OUTPUT
 
       - name: Log in to Amazon ECR
         id: login-ecr
