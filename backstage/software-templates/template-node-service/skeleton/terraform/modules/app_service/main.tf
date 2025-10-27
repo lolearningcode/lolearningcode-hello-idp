@@ -25,26 +25,38 @@ data "aws_vpcs" "selected" {
   }
 }
 
-# Use default VPC when no explicit VPC ID and no tag filters
+# Discover available VPCs when no explicit VPC ID is provided
+data "aws_vpcs" "available" {
+  count = var.vpc_id == "" ? 1 : 0
+}
+
+# Try to get default VPC first
 data "aws_vpc" "default" {
   count   = var.vpc_id == "" && !local.use_vpc_by_tags ? 1 : 0
   default = true
 }
 
-# Fallback: find any available VPC if no default VPC exists
-data "aws_vpcs" "any_available" {
-  count = var.vpc_id == "" && !local.use_vpc_by_tags && length(data.aws_vpc.default) == 0 ? 1 : 0
-}
-
 locals {
-  # VPC selection priority: explicit > tags > default > any available
+  # VPC selection logic
   vpc_id_effective = var.vpc_id != "" ? var.vpc_id : (
     local.use_vpc_by_tags && length(data.aws_vpcs.selected) > 0 && length(data.aws_vpcs.selected[0].ids) > 0 ?
     data.aws_vpcs.selected[0].ids[0] :
     length(data.aws_vpc.default) > 0 ?
     data.aws_vpc.default[0].id :
-    data.aws_vpcs.any_available[0].ids[0]
+    length(data.aws_vpcs.available) > 0 && length(data.aws_vpcs.available[0].ids) > 0 ?
+    data.aws_vpcs.available[0].ids[0] :
+    null
   )
+}
+
+# Validation to ensure we have a VPC
+resource "terraform_data" "vpc_validation" {
+  lifecycle {
+    precondition {
+      condition     = local.vpc_id_effective != null
+      error_message = "No VPC could be found. Please ensure there is at least one VPC in your AWS account or specify a vpc_id."
+    }
+  }
 }
 
 data "aws_subnets" "public_selected" {
