@@ -31,11 +31,19 @@ data "aws_vpc" "default" {
   default = true
 }
 
+# Fallback: find any available VPC if no default VPC exists
+data "aws_vpcs" "any_available" {
+  count = var.vpc_id == "" && !local.use_vpc_by_tags && length(data.aws_vpc.default) == 0 ? 1 : 0
+}
+
 locals {
+  # VPC selection priority: explicit > tags > default > any available
   vpc_id_effective = var.vpc_id != "" ? var.vpc_id : (
-    local.use_vpc_by_tags && length(data.aws_vpcs.selected[0].ids) > 0 ?
+    local.use_vpc_by_tags && length(data.aws_vpcs.selected) > 0 && length(data.aws_vpcs.selected[0].ids) > 0 ?
     data.aws_vpcs.selected[0].ids[0] :
-    data.aws_vpc.default[0].id
+    length(data.aws_vpc.default) > 0 ?
+    data.aws_vpc.default[0].id :
+    data.aws_vpcs.any_available[0].ids[0]
   )
 }
 
