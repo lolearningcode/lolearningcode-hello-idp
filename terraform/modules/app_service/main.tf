@@ -7,13 +7,14 @@ locals {
 }
 
 locals {
-  use_vpc_by_tags     = length(var.vpc_tag_filters) > 0
+  use_vpc_by_tags     = var.vpc_id == "" && length(var.vpc_tag_filters) > 0
   use_public_by_tags  = var.public_subnet_ids == null && length(var.public_subnet_tag_filters) > 0
   use_private_by_tags = var.private_subnet_ids == null && length(var.private_subnet_tag_filters) > 0
 }
 
+# Only look for VPCs by tags if we have filters AND no explicit VPC ID
 data "aws_vpcs" "selected" {
-  count = (var.vpc_id == "" && local.use_vpc_by_tags) ? 1 : 0
+  count = local.use_vpc_by_tags ? 1 : 0
 
   dynamic "filter" {
     for_each = var.vpc_tag_filters
@@ -24,14 +25,17 @@ data "aws_vpcs" "selected" {
   }
 }
 
+# Use default VPC when no explicit VPC ID and no tag filters
 data "aws_vpc" "default" {
-  count   = (var.vpc_id == "" && !local.use_vpc_by_tags) ? 1 : 0
+  count   = var.vpc_id == "" && !local.use_vpc_by_tags ? 1 : 0
   default = true
 }
 
 locals {
   vpc_id_effective = var.vpc_id != "" ? var.vpc_id : (
-    local.use_vpc_by_tags ? data.aws_vpcs.selected[0].ids[0] : data.aws_vpc.default[0].id
+    local.use_vpc_by_tags && length(data.aws_vpcs.selected[0].ids) > 0 ?
+    data.aws_vpcs.selected[0].ids[0] :
+    data.aws_vpc.default[0].id
   )
 }
 
