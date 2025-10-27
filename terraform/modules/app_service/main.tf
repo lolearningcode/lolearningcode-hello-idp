@@ -100,6 +100,16 @@ resource "aws_ecr_repository" "this" {
     encryption_type = "AES256"
   }
   tags = var.tags
+
+  lifecycle {
+    ignore_changes = [
+      image_tag_mutability,
+      image_scanning_configuration,
+      encryption_configuration,
+      tags,
+    ]
+    prevent_destroy = true
+  }
 }
 
 resource "aws_ecr_lifecycle_policy" "keep_recent" {
@@ -291,7 +301,7 @@ resource "aws_ecs_task_definition" "this" {
         logDriver = "awslogs"
         options = {
           awslogs-group         = aws_cloudwatch_log_group.this.name
-          awslogs-region        = data.aws_region.current.name
+          awslogs-region        = data.aws_region.current.id
           awslogs-stream-prefix = "ecs"
         }
       }

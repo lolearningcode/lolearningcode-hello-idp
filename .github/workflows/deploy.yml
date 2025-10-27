@@ -86,9 +86,29 @@ jobs:
             -backend-config="dynamodb_table=${{ env.TF_LOCK_TABLE }}" \
             -backend-config="encrypt=true"
 
-      - name: Terraform apply (create ECR repo first)
+      - name: Handle existing ECR repository
         working-directory: terraform
         run: |
+          set -e
+          
+          # Check if ECR repository already exists
+          ECR_REPO_NAME="${{ env.SERVICE_NAME }}-${{ env.ENVIRONMENT }}"
+          
+          if aws ecr describe-repositories --repository-names "$ECR_REPO_NAME" --region "${{ env.AWS_REGION }}" &>/dev/null; then
+            echo "ECR repository $ECR_REPO_NAME already exists, importing to Terraform state..."
+            
+            # Try to import the existing repository
+            terraform import \
+              -var="service_name=${{ env.SERVICE_NAME }}" \
+              -var="environment=${{ env.ENVIRONMENT }}" \
+              -var="region=${{ env.AWS_REGION }}" \
+              module.app_service.aws_ecr_repository.this \
+              "$ECR_REPO_NAME" || echo "Import failed or already imported"
+          else
+            echo "ECR repository $ECR_REPO_NAME does not exist, will be created by Terraform"
+          fi
+          
+          # Apply just the ECR repository
           terraform apply -auto-approve \
             -target=module.app_service.aws_ecr_repository.this \
             -var="service_name=${{ env.SERVICE_NAME }}" \
