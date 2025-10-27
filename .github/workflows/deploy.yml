@@ -37,41 +37,41 @@ jobs:
         run: |
           set -e
 
-          DEFAULT_BUCKET="backstage-tfstate-bucket"
-          FALLBACK_BUCKET="${DEFAULT_BUCKET}-${GITHUB_REPOSITORY//\//-}-${GITHUB_SHA:0:7}"
-          TF_BUCKET="$DEFAULT_BUCKET"
+          # Use a unique bucket name that includes GitHub username to avoid conflicts
+          UNIQUE_BUCKET="tfstate-${GITHUB_REPOSITORY_OWNER}-${GITHUB_SHA:0:8}"
+          LOCK_TABLE="tfstate-locks-${GITHUB_REPOSITORY_OWNER}"
 
-          echo "Checking if default S3 bucket '$DEFAULT_BUCKET' exists..."
+          echo "Creating unique S3 bucket: $UNIQUE_BUCKET"
+          
+          # Create bucket with proper region configuration for us-west-1
+          aws s3api create-bucket \
+            --bucket "$UNIQUE_BUCKET" \
+            --region "$AWS_REGION" \
+            --create-bucket-configuration LocationConstraint="$AWS_REGION" || {
+              echo "Bucket creation failed, trying alternative name..."
+              UNIQUE_BUCKET="tfstate-${GITHUB_REPOSITORY//\//-}-${GITHUB_SHA:0:12}"
+              aws s3api create-bucket \
+                --bucket "$UNIQUE_BUCKET" \
+                --region "$AWS_REGION" \
+                --create-bucket-configuration LocationConstraint="$AWS_REGION"
+            }
 
-          if ! aws s3api head-bucket --bucket "$DEFAULT_BUCKET" 2>/dev/null; then
-            echo "Creating default S3 bucket..."
-            aws s3api create-bucket \
-              --bucket "$DEFAULT_BUCKET" \
-              --region "$AWS_REGION" \
-              --create-bucket-configuration LocationConstraint="$AWS_REGION"
-          else
-            echo "Default bucket exists, creating a unique fallback bucket..."
-            aws s3api create-bucket \
-              --bucket "$FALLBACK_BUCKET" \
-              --region "$AWS_REGION" \
-              --create-bucket-configuration LocationConstraint="$AWS_REGION" || true
-            TF_BUCKET="$FALLBACK_BUCKET"
-            echo "Using fallback S3 bucket: $TF_BUCKET"
-          fi
-
-          echo "TF_BUCKET=$TF_BUCKET" >> "$GITHUB_ENV"
+          echo "TF_BUCKET=$UNIQUE_BUCKET" >> "$GITHUB_ENV"
+          echo "TF_LOCK_TABLE=$LOCK_TABLE" >> "$GITHUB_ENV"
 
           # Create DynamoDB table (lock table)
-          LOCK_TABLE="backstage-tf-locks"
           if ! aws dynamodb describe-table --table-name "$LOCK_TABLE" 2>/dev/null; then
-            echo "Creating DynamoDB lock table..."
+            echo "Creating DynamoDB lock table: $LOCK_TABLE"
             aws dynamodb create-table \
               --table-name "$LOCK_TABLE" \
               --attribute-definitions AttributeName=LockID,AttributeType=S \
               --key-schema AttributeName=LockID,KeyType=HASH \
               --billing-mode PAY_PER_REQUEST
+            
+            # Wait for table to be active
+            aws dynamodb wait table-exists --table-name "$LOCK_TABLE"
           else
-            echo "DynamoDB lock table already exists"
+            echo "DynamoDB lock table already exists: $LOCK_TABLE"
           fi
         env:
           AWS_REGION: ${{ env.AWS_REGION }}
@@ -83,7 +83,7 @@ jobs:
             -backend-config="bucket=${{ env.TF_BUCKET }}" \
             -backend-config="key=${{ env.SERVICE_NAME }}/${{ env.ENVIRONMENT }}/terraform.tfstate" \
             -backend-config="region=${{ env.AWS_REGION }}" \
-            -backend-config="dynamodb_table=backstage-tf-locks" \
+            -backend-config="dynamodb_table=${{ env.TF_LOCK_TABLE }}" \
             -backend-config="encrypt=true"
 
       - name: Terraform apply (create ECR repo first)

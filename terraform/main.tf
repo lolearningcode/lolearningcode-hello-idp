@@ -18,6 +18,7 @@ module "app_service" {
   service_name               = var.service_name
   environment                = var.environment
   vpc_id                     = var.vpc_id
+  public_subnet_ids          = var.public_subnet_ids
   private_subnet_ids         = var.private_subnet_ids
   vpc_tag_filters            = var.vpc_tag_filters
   public_subnet_tag_filters  = var.public_subnet_tag_filters
